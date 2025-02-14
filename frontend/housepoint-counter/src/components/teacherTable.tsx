@@ -32,7 +32,6 @@ export default function UserTable() {
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const { register, handleSubmit, reset } = useForm()
-  const [editingUser, setEditingUser] = useState<User | null>(null)
   const [editData, setEditData] = useState<{[key: string]: any}>({})
   const [updateSuccess, setUpdateSuccess] = useState(false)
 

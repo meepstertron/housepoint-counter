@@ -3,10 +3,10 @@ import $ from "jquery";
 
 const currentdomain = window.location.hostname;
 
-// let apiUrl = "https://api." + currentdomain;
+export let apiUrl = "https://api." + currentdomain;
 
 
-export let apiUrl = "http://localhost:8080";
+// export let apiUrl = "http://localhost:8080";
 
 export interface User {
     id: string;
@@ -30,12 +30,7 @@ export interface House {
     name: string;
 }
 
-interface Archive {
-    id: number;
-    studentammount: number;
-    houses: JSON;
 
-}
 
 // Define a custom type for the return value
 interface UserInfoResponse {

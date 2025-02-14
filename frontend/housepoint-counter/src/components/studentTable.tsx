@@ -247,7 +247,7 @@ export default function SearchableStudentTable() {
                     ))}
                   </select>
                 </div>
-                <div className="grid grid-cols-3 items-center gap-4 hidden">
+                <div className=" grid-cols-3 items-center gap-4 hidden">
                   <Label htmlFor="teacher_id">Homeroom Teacher</Label>
                   <div className="col-span-2">
                     <SearchableUserSelect userType="teacher" onSelect={handleTeacherSelect} />
