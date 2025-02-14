@@ -4,8 +4,10 @@ import './index.css'
 import App from './App.tsx'
 import ErrorBoundary from './pages/error/ErrorBoundary'
 import { GoogleOAuthProvider } from '@react-oauth/google'
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-const CLIENT_ID = "484730115359-bgorqn3ic46235degm71egndjdga1gur.apps.googleusercontent.com"
+const CLIENT_ID = googleClientId // NOTE TO FUTURE ME: do not upload the id to gh again. This is a public repo.
+
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

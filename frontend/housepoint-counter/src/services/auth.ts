@@ -1,6 +1,7 @@
+import { apiUrl } from '../lib/api';
+
 export async function loginUser(credentials: any) {
-  const currentdomain = window.location.hostname;
-  return fetch(`https://api.${currentdomain}/login`, {
+  return fetch(`${apiUrl}/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'

@@ -14,7 +14,9 @@ import ErrorBoundary from './pages/error/ErrorBoundary';
 import Settings_Page from './pages/Settings';
 import SettingsLayout from './SettingsLayout';
 
-const DEBUG_BYPASS_AUTH = true; // Set to true to bypass login and admin checks
+import Archive_Page from './pages/archive';
+
+const DEBUG_BYPASS_AUTH = false; // set to true to bypass and basically make the page work without an backend server (testing purposes do not ship to prod!)
 
 const App = () => {
   const { token, setToken } = useToken();
@@ -97,7 +99,7 @@ const App = () => {
             path='/archive'
             element={
               <RootLayout>
-                <div>Archive</div>
+                <Archive_Page />
               </RootLayout>
             }/>
           <Route

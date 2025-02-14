@@ -6,13 +6,12 @@ const currentdomain = window.location.hostname;
 // let apiUrl = "https://api." + currentdomain;
 
 
-let apiUrl = "http://localhost:8080";
+export let apiUrl = "http://localhost:8080";
 
 export interface User {
     id: string;
     name: string;
     email: string;
-    grad: number;
     admin: boolean;
 }
 
@@ -82,13 +81,19 @@ export async function getUserInfo(userID: number, token: string): Promise<UserIn
     });
 }
 
-export async function archivePoints() {
-  return new Promise(( reject) => {
+export async function archivePoints(token: string, reset: boolean): Promise<void> {
+  return new Promise((resolve, reject) => {
     $.ajax({
       url: `${apiUrl}/api/archive`,
       method: 'POST',
-      error: function () {
-        reject(new Error("Unable to fetch user info"));
+      headers: { 'Authorization': `Bearer ${token}` },
+      contentType: 'application/json',
+      data: JSON.stringify({ resetstats: reset }),
+      success: function (result) {
+        resolve(result);
+      },
+      error: function (error) {
+        reject(new Error(error.responseText || "Failed to create archive"));
       },
     });
   });
@@ -98,17 +103,16 @@ export async function getArchived(): Promise<any> {
   return new Promise((resolve, reject) => {
     $.ajax({
       url: `${apiUrl}/api/archive`,
-      method: 'POST',
-      error: function () {
-        reject(new Error("Unable to fetch archived"));
-      },
+      method: 'GET',
       success: function (result) {
         resolve(result);
+      },
+      error: function (error) {
+        reject(new Error(error.responseText || "Failed to fetch archives"));
       }
     });
   });
 }
-
 
 export async function getAllStudents(token: string): Promise<Student[]> {
     return new Promise((resolve, reject) => {
@@ -471,3 +475,38 @@ export async function updatePassword(currentPassword: string, newPassword: strin
     });
 }
 
+export async function updateStudent(studentData: Student, token: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    $.ajax({
+      url: `${apiUrl}/api/editstudent`,
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}` },
+      contentType: 'application/json',
+      data: JSON.stringify(studentData),
+      success: function () {
+        resolve();
+      },
+      error: function (error) {
+        reject(new Error("Unable to update student: " + error.responseText));
+      },
+    });
+  });
+}
+
+export async function updateTeacher(teacherData: User, token: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    $.ajax({
+      url: `${apiUrl}/api/editteacher`,
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}` },
+      contentType: 'application/json',
+      data: JSON.stringify(teacherData),
+      success: function () {
+        resolve();
+      },
+      error: function (error) {
+        reject(new Error("Unable to update teacher: " + error.responseText));
+      },
+    });
+  });
+}

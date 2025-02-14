@@ -1,2 +1,6 @@
-/mariadb_data
+/mariadb_data/
 /mariadb_data/*
+.vscode/
+.vscode/*
+docker-compose.override.yml
+.env

@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { ArrowUpDown, MoreHorizontal } from 'lucide-react'
-import { getAllStudents, addStudent, deleteStudent, Student, User } from '@/lib/api'
+import { getAllStudents, addStudent, deleteStudent, Student, User, updateStudent } from '@/lib/api'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Label } from '@/components/ui/label'
 import useToken from './useToken'
@@ -40,10 +40,11 @@ export default function SearchableStudentTable() {
     last_name: '',
     grad_year: '',
     points: '',
-    teacher_id: '',
+    teacher_id: '1',
     house: '' // Add house field
   })
   const [loading, setLoading] = useState(true)
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
   useEffect(() => {
     async function fetchStudents() {
@@ -127,6 +128,37 @@ export default function SearchableStudentTable() {
       console.error("Failed to delete student", error)
     }
   }
+
+  const handleEditStudent = async (studentData: Student) => {
+    try {
+      if (token) {
+        await updateStudent({
+          id: studentData.id,
+          first_name: studentData.first_name,
+          last_name: studentData.last_name,
+          grad_year: Number(studentData.grad_year),
+          points: Number(studentData.points),
+          house: Number(studentData.house),
+          teacher_name: studentData.teacher_name
+        }, token);
+        const students = await getAllStudents(token);
+        setStudents(students);
+        setEditingStudent(null);
+      }
+    } catch (error) {
+      console.error("Failed to update student", error);
+    }
+  };
+
+  const handleEditInputChange = (field: keyof Student, value: string | number) => {
+    setEditingStudent(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        [field]: value
+      };
+    });
+  };
 
   const filteredAndSortedStudents = students
     .filter(student =>
@@ -215,7 +247,7 @@ export default function SearchableStudentTable() {
                     ))}
                   </select>
                 </div>
-                <div className="grid grid-cols-3 items-center gap-4">
+                <div className="grid grid-cols-3 items-center gap-4 hidden">
                   <Label htmlFor="teacher_id">Homeroom Teacher</Label>
                   <div className="col-span-2">
                     <SearchableUserSelect userType="teacher" onSelect={handleTeacherSelect} />
@@ -252,7 +284,7 @@ export default function SearchableStudentTable() {
               <TableHead onClick={() => handleSort('house')} className="cursor-pointer">
                 House <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
               </TableHead>
-              <TableHead onClick={() => handleSort('teacher_name')} className="cursor-pointer">
+              <TableHead onClick={() => handleSort('teacher_name')} className="cursor-pointer hidden">
                 Homeroom Teacher <ArrowUpDown className="ml-2 h-4 w-4 inline-block" />
               </TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -266,7 +298,7 @@ export default function SearchableStudentTable() {
                 <TableCell>{student.grad_year}</TableCell>
                 <TableCell>{student.points}</TableCell>
                 <TableCell>{houses.find(house => house.id === student.house)?.name || 'Unknown'}</TableCell>
-                <TableCell>{student.teacher_name}</TableCell>
+                <TableCell className='hidden'>{student.teacher_name}</TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -281,8 +313,84 @@ export default function SearchableStudentTable() {
                         Award Housepoints
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      
-                      <DropdownMenuItem>Edit student</DropdownMenuItem>
+                      <Popover modal={true}>
+                        <PopoverTrigger asChild>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            Edit student
+                          </DropdownMenuItem>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80">
+                          <div className="grid gap-4">
+                            <div className="space-y-2">
+                              <h4 className="font-medium leading-none">Edit Student</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Modify the student's details.
+                              </p>
+                            </div>
+                            <div className="grid gap-2" onFocus={() => !editingStudent && setEditingStudent(student)}>
+                              <div className="grid grid-cols-3 items-center gap-4">
+                                <Label htmlFor={`edit-first-name-${student.id}`}>First Name</Label>
+                                <Input
+                                  id={`edit-first-name-${student.id}`}
+                                  value={editingStudent?.first_name ?? student.first_name}
+                                  onChange={(e) => handleEditInputChange('first_name', e.target.value)}
+                                  className="col-span-2 h-8"
+                                />
+                              </div>
+                              <div className="grid grid-cols-3 items-center gap-4">
+                                <Label htmlFor={`edit-last-name-${student.id}`}>Last Name</Label>
+                                <Input
+                                  id={`edit-last-name-${student.id}`}
+                                  value={editingStudent?.last_name ?? student.last_name}
+                                  onChange={(e) => handleEditInputChange('last_name', e.target.value)}
+                                  className="col-span-2 h-8"
+                                />
+                              </div>
+                              <div className="grid grid-cols-3 items-center gap-4">
+                                <Label htmlFor={`edit-grad-year-${student.id}`}>Grad Year</Label>
+                                <Input
+                                  id={`edit-grad-year-${student.id}`}
+                                  value={editingStudent?.grad_year ?? student.grad_year}
+                                  onChange={(e) => handleEditInputChange('grad_year', Number(e.target.value))}
+                                  className="col-span-2 h-8"
+                                />
+                              </div>
+                              <div className="grid grid-cols-3 items-center gap-4">
+                                <Label htmlFor={`edit-points-${student.id}`}>Points</Label>
+                                <Input
+                                  id={`edit-points-${student.id}`}
+                                  value={editingStudent?.points ?? student.points}
+                                  onChange={(e) => handleEditInputChange('points', Number(e.target.value))}
+                                  className="col-span-2 h-8"
+                                />
+                              </div>
+                              <div className="grid grid-cols-3 items-center gap-4">
+                                <Label htmlFor={`edit-house-${student.id}`}>House</Label>
+                                <select
+                                  id={`edit-house-${student.id}`}
+                                  value={editingStudent?.house ?? student.house}
+                                  onChange={(e) => handleEditInputChange('house', Number(e.target.value))}
+                                  className="col-span-2 h-8"
+                                >
+                                  <option value="">Select House</option>
+                                  {houses.map(house => (
+                                    <option key={house.id} value={house.id}>{house.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <Button 
+                                onClick={() => {
+                                  if (editingStudent) {
+                                    handleEditStudent(editingStudent);
+                                  }
+                                }}
+                              >
+                                Save Changes
+                              </Button>
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                       <DropdownMenuItem className="text-red-700" onClick={() => handleDeleteStudent(student.id)}>
                         Delete student
                       </DropdownMenuItem>

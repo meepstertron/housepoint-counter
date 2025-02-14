@@ -17,7 +17,9 @@ import os
 
 
 sentry_sdk.init(
-    dsn="https://657bd87070df01336602dc92adaba6fd@o4508069639553024.ingest.de.sentry.io/4508568654184528",
+    #NOTE TO SELF do not push the sentry dsn to github AGAIN! PS if you do do it its under settings>sdk setup>client keys (DSN) disable leaked dsn and create a new one!
+    #FFS if you push the .env file to github i will loose all my trust in myself
+    dsn=os.getenv('SENTRY_DSN'),
     # Set traces_sample_rate to 1.0 to capture 100%
     # of transactions for tracing.
     integrations=[FlaskIntegration()],
@@ -74,6 +76,8 @@ def log_action(log_level, message, user_id=None, username=None, method=None, url
             print(f"Logging error: {e}")
         finally:
             connection.close()
+
+
 
 
 
@@ -744,48 +748,209 @@ def get_logs():
 def archive():
     if request.method == 'OPTIONS':
         return _build_cors_preflight_response()
+    
+    auth_header = request.headers.get('Authorization')
+    if request.method == 'POST' and not auth_header:
+        log_action('ERROR', 'Token is missing for archiving', method=request.method, url=request.url, status_code=401)
+        return jsonify({"error": "Token is missing"}), 401
+
     connection = get_db_connection()
     if not connection:
         log_action('ERROR', 'Database connection failed for archive')
         return jsonify([]), 500
     
     if request.method == 'POST':
+        token = auth_header.split(" ")[-1] if " " in auth_header else auth_header
+        data = request.get_json()
+        should_reset = data.get('resetstats', False) if data else False
+
         datajson = []
         try:
+            # Get total number of students
+            student_count = connection.execute(text("SELECT COUNT(*) FROM students")).fetchone()[0]
+
+            # Get house data
             houses = connection.execute(text("SELECT id, name FROM houses"))
             for house in houses:
                 points = connection.execute(text("""
                     SELECT SUM(points) as total_points FROM students WHERE house = :house_id
                 """), {'house_id': house[0]})
-                house_points = points.fetchone()[0] or 0
+                house_points = float(points.fetchone()[0] or 0)
                 datajson.append({
                     'house_id': house[0],
                     'house_name': house[1],
                     'total_points': house_points
                 })
             
-            connection.execute(text("INSERT INTO archive (data) VALUES (:data)"), {'data': json.dumps(datajson)})
+            # Store archive with timestamp
+            connection.execute(text("""
+                INSERT INTO archive (data, studentammount, timestamp) 
+                VALUES (:data, :student_count, NOW())
+            """), {
+                'data': json.dumps(datajson),
+                'student_count': student_count
+            })
             connection.commit()
+            
+            # Only reset points if requested and user is admin
+            if should_reset and is_admin_user(token):
+                connection.execute(text("UPDATE students SET points = 0"))
+                connection.commit()
+            
             connection.close()
+            log_action('INFO', 'Data archived successfully', method=request.method, url=request.url, status_code=201)
+            return jsonify({"status": "success", "archived_data": datajson}), 201
+            
         except Exception as e:
+            connection.rollback()
             connection.close()
             log_action('ERROR', f'Error archiving: {e}', method=request.method, url=request.url, status_code=500, stack_trace=str(e))
             return jsonify({"error": str(e)}), 500
-        
-        log_action('INFO', 'Archive executed successfully', method=request.method, url=request.url, status_code=201)
-        
-        return jsonify({"status": "success"}), 201
-    if request.method == 'GET':
-        result = connection.execute(text("SELECT * FROM archive ORDER BY timestamp DESC"))
-        archive = result.fetchall()
-        connection.close()
-        if archive:
-            log_action('INFO', 'Archive retrieved successfully', method=request.method, url=request.url, status_code=200)
-            return jsonify(json.loads(archive[1]))
-        else:
-            log_action('ERROR', 'Archive not found', method=request.method, url=request.url, status_code=404)
-            return jsonify({"error": "Archive not found"}), 404
     
+    if request.method == 'GET':
+        try:
+            result = connection.execute(text("""
+                SELECT id, timestamp, data, studentammount 
+                FROM archive 
+                ORDER BY timestamp DESC
+            """))
+            archives = []
+            for row in result:
+                try:
+                    timestamp_str = row[1]
+                    formatted_timestamp = None
+                    if timestamp_str:
+                        try:
+                            if isinstance(timestamp_str, str):
+                                
+                                timestamp_str = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                            
+                            formatted_timestamp = timestamp_str.strftime("%Y-%m-%d %H:%M:%S")
+                        except (ValueError, TypeError):
+                            # If timestamp parsing fails, use None
+                            formatted_timestamp = None
+                            
+                    archives.append({
+                        'id': row[0],
+                        'timestamp': formatted_timestamp,
+                        'houses': json.loads(row[2]) if row[2] else [],
+                        'student_count': row[3]
+                    })
+                except (json.JSONDecodeError, TypeError, IndexError) as e:
+                    log_action('WARNING', f'Error parsing archive row: {e}', method=request.method, url=request.url)
+                    continue
+                    
+            connection.close()
+            return jsonify(archives)
+        except Exception as e:
+            connection.close()
+            log_action('ERROR', f'Error retrieving archives: {e}', method=request.method, url=request.url, status_code=500, stack_trace=str(e))
+            return jsonify({"error": str(e)}), 500
+
+@app.route('/api/editstudent', methods=['OPTIONS', 'PUT'])
+def editStudent():
+    if request.method == 'OPTIONS':
+        return _build_cors_preflight_response()
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        log_action('ERROR', 'Token is missing for edit_student', method=request.method, url=request.url, status_code=401)
+        return jsonify({"error": "Token is missing"}), 401
+    
+    token = auth_header.split(" ")[-1] if " " in auth_header else auth_header
+    
+    connection = get_db_connection()
+    
+    if not connection:
+        log_action('ERROR', 'Database connection failed for edit_student')
+        return jsonify({"error": "Database connection failed"}), 500
+    
+    result = connection.execute(text("SELECT id, name, email, password FROM users WHERE token = :token"), {'token': token})
+    user = result.fetchone()
+    if not user:
+        connection.close()
+        log_action('ERROR', 'Invalid token for edit_student', method=request.method, url=request.url, status_code=401)
+        return jsonify({"error": "Invalid token"}), 401
+    
+    data = request.get_json()
+    
+    updates = {}
+    
+    if 'first_name' in data:
+        updates['first_name'] = data['first_name']
+    if 'last_name' in data:
+        updates['last_name'] = data['last_name']
+    if 'grad_year' in data:
+        updates['grad_year'] = data['grad_year']
+    if 'points' in data:
+        updates['points'] = data['points']
+    if 'teacher' in data:
+        updates['teacher'] = data['teacher']
+    if 'house' in data:
+        updates['house'] = data['house']
+        
+    if updates:
+        try:
+            connection.execute(text("UPDATE students SET " + ", ".join(f"{key} = :{key}" for key in updates.keys()) + " WHERE id = :id"), {**updates, 'id': data['id']})
+            connection.commit()
+            connection.close()
+            log_action('INFO', 'Student edited successfully', user_id=user[0], method=request.method, url=request.url, status_code=200)
+            return jsonify({"status": "success"}), 200
+        except Exception as e:
+            connection.rollback()
+            connection.close()
+            log_action('ERROR', f'Error editing student: {e}', user_id=user[0], method=request.method, url=request.url, status_code=500, stack_trace=str(e))
+            return jsonify({"error": str(e)}), 500
+        
+        
+@app.route('/api/editteacher', methods=['OPTIONS', 'PUT'])
+def editTeacher():
+    if request.method == 'OPTIONS':
+        return _build_cors_preflight_response()
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        log_action('ERROR', 'Token is missing for edit_teacher', method=request.method, url=request.url, status_code=401)
+        return jsonify({"error": "Token is missing"}), 401
+    
+    token = auth_header.split(" ")[-1] if " " in auth_header else auth_header
+    
+    connection = get_db_connection()
+    
+    if not connection:
+        log_action('ERROR', 'Database connection failed for edit_teacher')
+        return jsonify({"error": "Database connection failed"}), 500
+    
+    result = connection.execute(text("SELECT id, name, email, password FROM users WHERE token = :token"), {'token': token})
+    user = result.fetchone()
+    if not user:
+        connection.close()
+        log_action('ERROR', 'Invalid token for edit_teacher', method=request.method, url=request.url, status_code=401)
+        return jsonify({"error": "Invalid token"}), 401
+    
+    data = request.get_json()
+    
+    updates = {}
+    
+    if 'name' in data:
+        updates['name'] = data['name']
+    if 'email' in data:
+        updates['email'] = data['email']
+    if 'admin' in data:
+        updates['admin'] = data['admin']
+    if 'password' in data:
+        updates['password'] = generate_password_hash(data['password'])
+        
+    if updates:
+        try:
+            connection.execute(text("UPDATE users SET " + ", ".join(f"{key} = :{key}" for key in updates.keys()) + " WHERE id = :id"), {**updates, 'id': data['id']})
+            connection.commit()
+            connection.close()
+            log_action('INFO', 'Teacher edited successfully', user_id=user[0], method=request.method, url=request.url, status_code=200)
+            return jsonify({"status": "success"}), 200
+        except Exception as e:
+            connection.rollback()
+            connection.close()
+            log_action('ERROR', f'Error editing teacher: {e}', user_id=user[0], method=request.method, url=request.url, status_code=500, stack_trace=str(e))
+            return jsonify({"error": str(e)}), 500    
         
                 
                 
