@@ -4,3 +4,4 @@ flask_sqlalchemy
 werkzeug
 pymysql
 sentry-sdk[flask]
+gunicorn==20.1.0

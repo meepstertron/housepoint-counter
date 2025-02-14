@@ -11,6 +11,15 @@ A web-based rewards system that manages student achievements through a house poi
 - Data archiving and backup capabilities
 - Year-end data management
 
+## Demo
+
+A demo is availible under https://housepoint-counter.hexagonical.ch
+
+email: root@local.local
+password: 1234 
+
+i will purge the db every so often to prevent people from locking out others :P (yes its a chronjob)
+
 ## Setup
 
 1. Clone the repository
