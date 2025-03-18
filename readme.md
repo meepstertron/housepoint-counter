@@ -64,6 +64,3 @@ For questions or support, please contact:
 
 Contributions are welcome! Please feel free to submit pull requests.
 
-## License
-
-MIT License
